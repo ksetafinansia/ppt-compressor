@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from flask import Flask, request, render_template, send_file, redirect, url_for, flash, session
 from werkzeug.utils import secure_filename
-from compress_ppt import compress_ppt
+from compress_ppt import compress_ppt, ALLOWED_EXTENSIONS, MAX_FILE_SIZE
 
 # Configure logging
 logging.basicConfig(
@@ -29,10 +29,21 @@ app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  # Used for flashi
 
 # Configure upload settings - use environment paths for cloud deployment
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'uploads'))
-DOWNLOAD_FOLDER = os.environ.get('DOWNLOAD_FOLDER', os.path.join(BASE_DIR, 'downloads'))
-BACKUP_FOLDER = os.environ.get('BACKUP_FOLDER', os.path.join(BASE_DIR, 'backup'))
-ALLOWED_EXTENSIONS = {'pptx'}
+
+# Use Render's persistent disk if available, otherwise use local paths
+RENDER_DATA_DIR = os.environ.get('RENDER_DISK_MOUNT_PATH', '/var/data')
+if os.path.exists(RENDER_DATA_DIR):
+    UPLOAD_FOLDER = os.path.join(RENDER_DATA_DIR, 'uploads')
+    DOWNLOAD_FOLDER = os.path.join(RENDER_DATA_DIR, 'downloads')
+    BACKUP_FOLDER = os.path.join(RENDER_DATA_DIR, 'backup')
+    logging.info(f"Using Render persistent storage at {RENDER_DATA_DIR}")
+else:
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', os.path.join(BASE_DIR, 'uploads'))
+    DOWNLOAD_FOLDER = os.environ.get('DOWNLOAD_FOLDER', os.path.join(BASE_DIR, 'downloads'))
+    BACKUP_FOLDER = os.environ.get('BACKUP_FOLDER', os.path.join(BASE_DIR, 'backup'))
+    logging.info("Using local storage directories")
+
+ALLOWED_EXTENSIONS_SET = {ext.strip('.') for ext in ALLOWED_EXTENSIONS}  # Strip the dot from extensions
 
 # Create directories if they don't exist
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -41,12 +52,23 @@ os.makedirs(BACKUP_FOLDER, exist_ok=True)
 
 # Configure app settings
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200 MB max upload size
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE  # Use the same 1.5GB limit from compress_ppt.py
 
 def allowed_file(filename):
     """Check if the file has an allowed extension"""
     return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS_SET
+
+def format_size(size_bytes):
+    """Format file size in bytes to a human-readable string"""
+    if size_bytes < 1024:
+        return f"{size_bytes} bytes"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 * 1024 * 1024:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_file():
@@ -64,6 +86,15 @@ def upload_file():
             return redirect(request.url)
         
         if file and allowed_file(file.filename):
+            # Check file size before saving
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)  # Reset file pointer to beginning
+            
+            if file_size > MAX_FILE_SIZE:
+                flash(f'File is too large: {format_size(file_size)}. Maximum allowed size is {format_size(MAX_FILE_SIZE)}.')
+                return redirect(request.url)
+                
             # Generate a unique filename to prevent conflicts
             unique_id = uuid.uuid4().hex[:8]
             original_filename = secure_filename(file.filename)
@@ -106,7 +137,8 @@ def upload_file():
                 return redirect(request.url)
         
         else:
-            flash('Only .pptx files are allowed')
+            allowed_ext_list = ", ".join([f".{ext}" for ext in ALLOWED_EXTENSIONS_SET])
+            flash(f'Invalid file type. Allowed file types are: {allowed_ext_list}')
             return redirect(request.url)
     
     return render_template('index.html')

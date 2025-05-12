@@ -2,8 +2,17 @@ services:
   - type: web
     name: ppt-compressor
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: ./render_build.sh
     startCommand: gunicorn app:app
+    plan: free
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CLEANUP_KEY
+        generateValue: true
+    disk:
+      name: ppt-storage
+      mountPath: /var/data
+      sizeGB: 1

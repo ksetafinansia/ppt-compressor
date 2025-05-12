@@ -24,6 +24,44 @@ formatter = logging.Formatter('%(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
+# Define constants
+MAX_FILE_SIZE = 1.5 * 1024 * 1024 * 1024  # 1.5GB in bytes
+ALLOWED_EXTENSIONS = {'.ppt', '.pptx'}
+
+# Use Render's persistent disk for backup if available
+RENDER_DATA_DIR = os.environ.get('RENDER_DISK_MOUNT_PATH', '/var/data')
+if os.path.exists(RENDER_DATA_DIR):
+    DEFAULT_BACKUP_DIR = os.path.join(RENDER_DATA_DIR, 'backup')
+else:
+    DEFAULT_BACKUP_DIR = "backup"
+
+def validate_powerpoint_file(file_path):
+    """
+    Validate that the file is a PowerPoint file (ppt or pptx) and within size limits
+    
+    Args:
+        file_path (str): Path to the PowerPoint file
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    # Check if file exists
+    if not os.path.exists(file_path):
+        return False, f"File not found: {file_path}"
+    
+    # Check file extension
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        return False, f"Invalid file type: {file_ext}. Only .ppt and .pptx files are allowed."
+    
+    # Check file size
+    file_size = os.path.getsize(file_path)
+    if file_size > MAX_FILE_SIZE:
+        size_in_gb = file_size / (1024 * 1024 * 1024)
+        return False, f"File is too large: {size_in_gb:.2f}GB. Maximum allowed size is 1.5GB."
+    
+    return True, None
+
 def is_ffmpeg_available():
     """
     Check if FFmpeg is available on the system
@@ -186,6 +224,12 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
         bool: True if successful, False otherwise
     """
     try:
+        # Validate the PowerPoint file
+        is_valid, error_message = validate_powerpoint_file(ppt_file)
+        if not is_valid:
+            logging.error(error_message)
+            return False
+        
         # Step 1: Make a backup of the file
         ppt_path = Path(ppt_file)
         if not ppt_path.exists() or not ppt_path.is_file():
@@ -193,7 +237,7 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             return False
         
         # Create backup directory if it doesn't exist
-        backup_dir = Path("backup")
+        backup_dir = Path(DEFAULT_BACKUP_DIR)
         if not backup_dir.exists():
             logging.info(f"Creating backup directory: {backup_dir}")
             backup_dir.mkdir()
