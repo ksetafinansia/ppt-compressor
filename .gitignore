@@ -1,0 +1,33 @@
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Environment variables
+.env
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# User-uploaded content and temporary files
+uploads/*
+!uploads/.gitkeep
+downloads/*
+!downloads/.gitkeep
+backup/*
+!backup/.gitkeep
+temp_extract/
+
+# macOS system files
+.DS_Store
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo

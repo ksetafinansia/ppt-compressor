@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div>
+    <p>Upload a PowerPoint (.pptx) file to compress its images and videos.</p>
+    
+    <form method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file">Select PowerPoint file:</label>
+            <input type="file" name="file" id="file" accept=".pptx" required>
+        </div>
+        
+        <div class="parameters">
+            <h3>Compression Parameters</h3>
+            
+            <div class="form-group">
+                <label for="image_scale">Image Scale (%):</label>
+                <div class="slider-container">
+                    <input type="range" name="image_scale" id="image_scale" min="0.1" max="1" step="0.05" value="0.5" oninput="updateImageScaleValue(this.value)">
+                    <span id="image_scale_value">50%</span>
+                </div>
+                <small>Lower values = smaller file size, but lower image quality</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="image_quality">Image Quality:</label>
+                <div class="slider-container">
+                    <input type="range" name="image_quality" id="image_quality" min="10" max="100" step="5" value="70" oninput="updateImageQualityValue(this.value)">
+                    <span id="image_quality_value">70</span>
+                </div>
+                <small>Lower values = smaller file size, but lower image quality</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="video_crf">Video Quality (CRF):</label>
+                <div class="slider-container">
+                    <input type="range" name="video_crf" id="video_crf" min="18" max="35" step="1" value="28" oninput="updateVideoCRFValue(this.value)">
+                    <span id="video_crf_value">28</span>
+                </div>
+                <small>Lower values = higher quality, but larger file size (18-28 recommended)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="video_preset">Video Compression Speed:</label>
+                <select name="video_preset" id="video_preset">
+                    <option value="ultrafast">Ultrafast (Lower Compression)</option>
+                    <option value="superfast">Superfast</option>
+                    <option value="veryfast">Very Fast</option>
+                    <option value="faster">Faster</option>
+                    <option value="fast">Fast</option>
+                    <option value="medium" selected>Medium (Balanced)</option>
+                    <option value="slow">Slow</option>
+                    <option value="slower">Slower</option>
+                    <option value="veryslow">Very Slow (Better Compression)</option>
+                </select>
+                <small>Slower presets = better compression, but longer processing time</small>
+            </div>
+        </div>
+        
+        <button type="submit">Compress PowerPoint</button>
+    </form>
+</div>
+
+<script>
+    function updateImageScaleValue(val) {
+        document.getElementById('image_scale_value').textContent = Math.round(val * 100) + '%';
+    }
+    
+    function updateImageQualityValue(val) {
+        document.getElementById('image_quality_value').textContent = val;
+    }
+    
+    function updateVideoCRFValue(val) {
+        document.getElementById('video_crf_value').textContent = val;
+    }
+</script>
+{% endblock %}

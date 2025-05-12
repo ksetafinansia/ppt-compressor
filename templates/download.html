@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+
+{% block title %}Download Compressed PowerPoint - PPT Compressor{% endblock %}
+
+{% block content %}
+<div class="success">
+    <h2>Compression Complete!</h2>
+    <p>Your PowerPoint file has been successfully compressed and is ready for download.</p>
+    
+    <div style="margin: 30px 0;">
+        <a href="{{ url_for('get_file', filename=filename) }}">
+            <button class="download-btn">Download Compressed File</button>
+        </a>
+    </div>
+    
+    <p>
+        <a href="{{ url_for('upload_file') }}">Compress another file</a>
+    </p>
+</div>
+{% endblock %}
