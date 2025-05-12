@@ -35,6 +35,10 @@ class MemoryLogHandler(logging.Handler):
         self.formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
     def emit(self, record):
+        # Filter out Flask and Werkzeug HTTP request logs
+        if record.name.startswith('werkzeug') or record.name.startswith('flask'):
+            return
+            
         self.logs.append(self.formatter.format(record))
         if len(self.logs) > self.capacity:
             self.logs.pop(0)  # Remove oldest log entry if capacity reached
