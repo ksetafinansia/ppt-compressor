@@ -26,6 +26,27 @@ formatter = logging.Formatter('%(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
+# Add a memory handler to capture logs for the web interface
+class MemoryLogHandler(logging.Handler):
+    def __init__(self, capacity=100):
+        logging.Handler.__init__(self)
+        self.capacity = capacity
+        self.logs = []
+        self.formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    def emit(self, record):
+        self.logs.append(self.formatter.format(record))
+        if len(self.logs) > self.capacity:
+            self.logs.pop(0)  # Remove oldest log entry if capacity reached
+
+    def get_logs(self):
+        return self.logs
+
+# Create and add memory handler
+memory_handler = MemoryLogHandler()
+memory_handler.setLevel(logging.INFO)
+logging.getLogger('').addHandler(memory_handler)
+
 # Create Flask app
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))  # Used for flashing messages
@@ -102,6 +123,7 @@ def compress_file_task(task):
         
         # Run the compression (the actual function doesn't report progress yet)
         success = compress_ppt(
+            task.file_path,
             task.output_path, 
             image_scale=task.params['image_scale'],
             image_quality=task.params['image_quality'],
@@ -115,11 +137,13 @@ def compress_file_task(task):
             task.message = "Compression completed successfully!"
             task.compressed_filename = os.path.basename(task.output_path)
             task.original_filename = task.params['original_filename']
+            # Store the result without using url_for outside of app context
             task.result = {
                 "success": True,
                 "compressed_filename": task.compressed_filename,
                 "original_filename": task.original_filename,
-                "redirect_url": url_for('download_file')
+                # Use a simple string instead of url_for
+                "redirect_url": "/download"
             }
         else:
             task.status = "error"
@@ -273,6 +297,24 @@ def task_status(task_id):
 @app.route('/download')
 def download_file():
     """Download page for the compressed file"""
+    # Check both session and task_id parameter for file information
+    task_id = request.args.get('task_id') or session.get('task_id')
+    
+    # First try to get the file from the task if available
+    if task_id and task_id in tasks:
+        task = tasks[task_id]
+        if task.status == "complete" and task.compressed_filename:
+            compressed_filename = task.compressed_filename
+            original_filename = task.original_filename or 'presentation.pptx'
+            download_path = os.path.join(DOWNLOAD_FOLDER, compressed_filename)
+            
+            if os.path.exists(download_path):
+                # Store in session for future access
+                session['compressed_filename'] = compressed_filename
+                session['original_filename'] = original_filename
+                return render_template('download.html', filename=compressed_filename, original_filename=original_filename)
+    
+    # Fall back to session data if task not found or incomplete
     if 'compressed_filename' not in session:
         flash('No compressed file available')
         return redirect(url_for('index'))
@@ -298,6 +340,12 @@ def get_file(filename):
         as_attachment=True,
         download_name=download_name
     )
+
+@app.route('/logs')
+def get_logs():
+    """Return the captured logs from the memory handler"""
+    logs = memory_handler.get_logs()
+    return jsonify({"logs": logs})
 
 # Periodic cleanup to avoid filling disk space
 @app.route('/cleanup', methods=['GET'])

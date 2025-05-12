@@ -65,6 +65,14 @@
         <div class="progress-bar" id="progress-bar" style="width: 0%">0%</div>
         <p class="status-message" id="status-message">Preparing to process...</p>
     </div>
+    
+    <!-- Log Display Area -->
+    <div class="log-container" id="log-container" style="display: none;">
+        <h3>Process Logs</h3>
+        <pre id="log-content" class="log-content"></pre>
+        <button id="toggle-logs-btn" onclick="toggleLogs()">Hide Logs</button>
+        <button id="refresh-logs-btn" onclick="fetchLogs()">Refresh Logs</button>
+    </div>
 </div>
 
 <script>
@@ -78,6 +86,42 @@
     
     function updateVideoCRFValue(val) {
         document.getElementById('video_crf_value').textContent = val;
+    }
+    
+    // Log display functionality
+    function toggleLogs() {
+        const logContent = document.getElementById('log-content');
+        const toggleBtn = document.getElementById('toggle-logs-btn');
+        
+        if (logContent.style.display === 'none') {
+            logContent.style.display = 'block';
+            toggleBtn.textContent = 'Hide Logs';
+            fetchLogs(); // Refresh logs when showing
+        } else {
+            logContent.style.display = 'none';
+            toggleBtn.textContent = 'Show Logs';
+        }
+    }
+    
+    function fetchLogs() {
+        fetch('/logs')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('log-content').textContent = data.logs.join('\n');
+                document.getElementById('log-container').style.display = 'block';
+            })
+            .catch(error => console.error('Error fetching logs:', error));
+    }
+    
+    // Auto-refresh logs during processing
+    let logRefreshInterval;
+    
+    function startLogRefresh() {
+        logRefreshInterval = setInterval(fetchLogs, 2000); // Refresh logs every 2 seconds
+    }
+    
+    function stopLogRefresh() {
+        clearInterval(logRefreshInterval);
     }
     
     // Progress tracking functionality
@@ -97,9 +141,14 @@
                 return;
             }
             
-            // Show progress bar
+            // Show progress bar and logs
             progressContainer.style.display = 'block';
+            document.getElementById('log-container').style.display = 'block';
+            document.getElementById('log-content').style.display = 'block';
             submitBtn.disabled = true;
+            
+            // Start refreshing logs automatically
+            startLogRefresh();
             
             // Create FormData object
             const formData = new FormData(form);
@@ -115,6 +164,7 @@
                     progressBar.style.width = percentComplete + '%';
                     progressBar.textContent = percentComplete + '%';
                     statusMessage.textContent = 'Uploading file...';
+                    fetchLogs(); // Fetch logs during upload
                 }
             });
             
@@ -131,6 +181,7 @@
                                 progressBar.style.width = '100%';
                                 progressBar.textContent = '100%';
                                 statusMessage.textContent = 'Compression complete! Redirecting...';
+                                stopLogRefresh();
                                 window.location.href = response.redirect_url;
                             } else if (response.status === 'processing') {
                                 // We need to poll for status
@@ -138,12 +189,14 @@
                             }
                         } catch (e) {
                             // Not JSON, probably HTML response
+                            stopLogRefresh();
                             window.location.href = "/download";
                         }
                     } else {
                         // Error
                         statusMessage.textContent = 'Error: ' + xhr.statusText;
                         submitBtn.disabled = false;
+                        stopLogRefresh();
                     }
                 }
             };
@@ -165,24 +218,28 @@
                             progressBar.style.width = progress + '%';
                             progressBar.textContent = progress + '%';
                             statusMessage.textContent = data.message || 'Processing...';
+                            fetchLogs(); // Fetch logs during processing
                         } else if (data.status === 'complete') {
                             // Task completed
                             clearInterval(statusCheck);
                             progressBar.style.width = '100%';
                             progressBar.textContent = '100%';
                             statusMessage.textContent = 'Compression complete! Redirecting...';
+                            stopLogRefresh();
                             window.location.href = data.redirect_url;
                         } else if (data.status === 'error') {
                             // Error occurred
                             clearInterval(statusCheck);
                             statusMessage.textContent = 'Error: ' + data.error;
                             submitBtn.disabled = false;
+                            stopLogRefresh();
                         }
                     })
                     .catch(error => {
                         clearInterval(statusCheck);
                         statusMessage.textContent = 'Error checking status: ' + error;
                         submitBtn.disabled = false;
+                        stopLogRefresh();
                     });
             }, 1000); // Check every 1 second
         }
