@@ -1,0 +1,33 @@
+run = "python app.py"
+modules = ["python-3.10:v18-20230807-322e88b"]
+
+hidden = [".config", "**/__pycache__", "**/.mypy_cache", "**/*.pyc"]
+
+[nix]
+channel = "stable-23_11"
+
+[unitTest]
+language = "python3"
+
+[env]
+PYTHONPATH = "."
+PATH = "/home/runner/${REPL_SLUG}/bin:$PATH"
+
+[packager]
+language = "python3"
+
+[packager.features]
+enabledForHosting = true
+packageSearch = true
+guessImports = true
+
+[languages.python3]
+pattern = "**/*.py"
+syntax = "python"
+
+[languages.python3.languageServer]
+start = ["pylsp"]
+
+[deployment]
+run = ["sh", "-c", "python app.py"]
+deploymentTarget = "cloudrun"

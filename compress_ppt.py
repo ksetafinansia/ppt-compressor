@@ -24,6 +24,58 @@ formatter = logging.Formatter('%(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
+# Define constants
+MAX_FILE_SIZE = 1.5 * 1024 * 1024 * 1024  # 1.5GB in bytes
+ALLOWED_EXTENSIONS = {'.ppt', '.pptx'}
+
+# Check if running on Replit
+is_replit = 'REPL_ID' in os.environ
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if is_replit:
+    # Use Replit persistent storage
+    REPLIT_DATA_DIR = os.path.join(BASE_DIR, '.data')
+    os.makedirs(REPLIT_DATA_DIR, exist_ok=True)
+    DEFAULT_BACKUP_DIR = os.path.join(REPLIT_DATA_DIR, 'backup')
+elif os.path.exists(os.environ.get('RENDER_DISK_MOUNT_PATH', '/var/data')):
+    # Use Render's persistent disk
+    DEFAULT_BACKUP_DIR = os.path.join(os.environ.get('RENDER_DISK_MOUNT_PATH'), 'backup')
+else:
+    DEFAULT_BACKUP_DIR = "backup"
+
+# Create backup directory if it doesn't exist
+os.makedirs(DEFAULT_BACKUP_DIR, exist_ok=True)
+
+# Progress callback for tracking compression status
+DEFAULT_PROGRESS_CALLBACK = None
+
+def validate_powerpoint_file(file_path):
+    """
+    Validate that the file is a PowerPoint file (ppt or pptx) and within size limits
+    
+    Args:
+        file_path (str): Path to the PowerPoint file
+    
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    # Check if file exists
+    if not os.path.exists(file_path):
+        return False, f"File not found: {file_path}"
+    
+    # Check file extension
+    file_ext = os.path.splitext(file_path)[1].lower()
+    if file_ext not in ALLOWED_EXTENSIONS:
+        return False, f"Invalid file type: {file_ext}. Only .ppt and .pptx files are allowed."
+    
+    # Check file size
+    file_size = os.path.getsize(file_path)
+    if file_size > MAX_FILE_SIZE:
+        size_in_gb = file_size / (1024 * 1024 * 1024)
+        return False, f"File is too large: {size_in_gb:.2f}GB. Maximum allowed size is 1.5GB."
+    
+    return True, None
+
 def is_ffmpeg_available():
     """
     Check if FFmpeg is available on the system
@@ -42,7 +94,7 @@ def is_ffmpeg_available():
     except Exception:
         return False
 
-def compress_video(video_path, output_path=None, crf=28, preset="medium"):
+def compress_video(video_path, output_path=None, crf=28, preset="medium", progress_callback=None):
     """
     Compress a video file using FFmpeg
     
@@ -51,6 +103,7 @@ def compress_video(video_path, output_path=None, crf=28, preset="medium"):
         output_path (str, optional): Path to save the compressed video. If None, uses a temp file.
         crf (int): Constant Rate Factor - controls quality (18-28 is good, higher = smaller file)
         preset (str): FFmpeg preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow)
+        progress_callback (callable, optional): Function to call with progress updates (percent, message)
     
     Returns:
         tuple: (success, original_size_kb, compressed_size_kb, output_path)
@@ -120,7 +173,7 @@ def compress_video(video_path, output_path=None, crf=28, preset="medium"):
             os.remove(temp_file)
         return False, 0, 0, None
 
-def process_video_directory(directory_path, crf=28, preset="medium", extensions=None):
+def process_video_directory(directory_path, crf=28, preset="medium", extensions=None, progress_callback=None):
     """
     Process all videos in a directory
     
@@ -129,6 +182,7 @@ def process_video_directory(directory_path, crf=28, preset="medium", extensions=
         crf (int): Constant Rate Factor for FFmpeg (quality)
         preset (str): FFmpeg preset for encoding speed
         extensions (list): List of video file extensions to process
+        progress_callback (callable, optional): Function to call with progress updates (percent, message)
     
     Returns:
         tuple: (processed_count, total_original_size, total_compressed_size)
@@ -153,7 +207,7 @@ def process_video_directory(directory_path, crf=28, preset="medium", extensions=
                 temp_output = f"{file_path}.temp.mp4"
                 
                 total_files += 1
-                success, orig_size, comp_size, output_path = compress_video(file_path, temp_output, crf, preset)
+                success, orig_size, comp_size, output_path = compress_video(file_path, temp_output, crf, preset, progress_callback)
                 
                 if success:
                     # Replace original with compressed
@@ -171,7 +225,7 @@ def process_video_directory(directory_path, crf=28, preset="medium", extensions=
         
     return processed_files, total_original_size, total_compressed_size
 
-def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, video_preset="medium"):
+def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, video_preset="medium", progress_callback=None):
     """
     Compress images and videos in PowerPoint file by extracting, compressing and repacking
     
@@ -181,31 +235,54 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
         image_quality (int): Quality level for image compression (1-100)
         video_crf (int): Constant Rate Factor for video compression (18-28 recommended)
         video_preset (str): FFmpeg preset for video encoding speed
+        progress_callback (callable): Optional function to receive progress updates with signature:
+                                     func(progress_percent, status_message)
     
     Returns:
         bool: True if successful, False otherwise
     """
     try:
+        # Set default progress callback if none provided
+        if progress_callback is None:
+            progress_callback = DEFAULT_PROGRESS_CALLBACK
+            
+        # Report progress: Started
+        if progress_callback:
+            progress_callback(0.05, "Validating PowerPoint file...")
+
+        # Validate the PowerPoint file
+        is_valid, error_message = validate_powerpoint_file(ppt_file)
+        if not is_valid:
+            logging.error(error_message)
+            if progress_callback:
+                progress_callback(0, f"Error: {error_message}")
+            return False
+        
         # Step 1: Make a backup of the file
         ppt_path = Path(ppt_file)
         if not ppt_path.exists() or not ppt_path.is_file():
-            logging.error(f"File not found: {ppt_file}")
+            error_msg = f"File not found: {ppt_file}"
+            logging.error(error_msg)
+            if progress_callback:
+                progress_callback(0, f"Error: {error_msg}")
             return False
         
-        # Create backup directory if it doesn't exist
-        backup_dir = Path("backup")
-        if not backup_dir.exists():
-            logging.info(f"Creating backup directory: {backup_dir}")
-            backup_dir.mkdir()
+        # Report progress: Creating backup
+        if progress_callback:
+            progress_callback(0.1, "Creating backup of PowerPoint file...")
             
-        backup_filename = f"{ppt_path.stem}{ppt_path.suffix}.backup"
-        backup_path = backup_dir / backup_filename
+        backup_path = Path(DEFAULT_BACKUP_DIR) / f"{ppt_path.name}.backup"
         
+        # Create a backup only if it doesn't exist
         if not backup_path.exists():
             logging.info(f"Creating backup: {backup_path}")
             shutil.copy2(ppt_file, backup_path)
         else:
             logging.info(f"Backup already exists: {backup_path}")
+        
+        # Report progress: Extracting content
+        if progress_callback:
+            progress_callback(0.15, "Extracting PowerPoint contents...")
             
         # Create a temporary working directory
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -219,23 +296,57 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             # Step 3: Extract the zip contents
             with zipfile.ZipFile(ppt_file, 'r') as zip_ref:
                 zip_ref.extractall(extract_path)
+            
+            # Report progress: Checking for media
+            if progress_callback:
+                progress_callback(0.25, "Looking for media content to compress...")
                 
             # Step 4: Check if ppt/media directory exists
             media_path = extract_path / "ppt" / "media"
+            
+            image_count = 0
+            video_count = 0
+            
             if media_path.exists() and media_path.is_dir():
+                # Count images and videos for progress tracking
+                for f in os.listdir(media_path):
+                    if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.bmp')):
+                        image_count += 1
+                    elif f.lower().endswith(('.mp4', '.avi', '.mov', '.wmv')):
+                        video_count += 1
+                
+                # Report progress: Starting image compression
+                if progress_callback:
+                    progress_callback(0.3, f"Compressing {image_count} images...")
+                
                 # Step 5a: Compress images using compress_image.py
                 logging.info(f"Compressing images in ppt/media directory")
                 try:
                     from compress_image import process_directory
                     process_directory(str(media_path), image_scale, image_quality)
+                    
+                    # Report progress: Images done, starting videos
+                    if progress_callback and video_count > 0:
+                        progress_callback(0.6, f"Compressing {video_count} videos...")
+                    
                 except ImportError:
                     logging.error("Could not import compress_image.py for image compression")
+                    if progress_callback:
+                        progress_callback(0.3, "Warning: Could not compress images (module missing)")
                     
                 # Step 5b: Compress videos in ppt/media directory
-                logging.info(f"Compressing videos in ppt/media directory")
-                process_video_directory(str(media_path), video_crf, video_preset)
+                if video_count > 0:
+                    logging.info(f"Compressing videos in ppt/media directory")
+                    process_video_directory(str(media_path), video_crf, video_preset)
+                
             else:
                 logging.warning(f"No media directory found at {media_path}")
+                if progress_callback:
+                    progress_callback(0.5, "No media content found to compress")
+            
+            # Report progress: Repacking content
+            if progress_callback:
+                progress_callback(0.8, "Repacking compressed content...")
                 
             # Step 6-7: Create a new zip file with the compressed contents
             logging.info(f"Repacking compressed content to {ppt_file}")
@@ -247,6 +358,9 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             # Zip everything back up
             with zipfile.ZipFile(ppt_file, 'w', compression=zipfile.ZIP_DEFLATED) as new_zip:
                 # Walk through all files in the extracted directory and add them to the zip
+                file_count = 0
+                total_files = sum([len(files) for _, _, files in os.walk(extract_path)])
+                
                 for folder_path, _, filenames in os.walk(extract_path):
                     for filename in filenames:
                         file_path = os.path.join(folder_path, filename)
@@ -254,6 +368,16 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
                         arc_name = os.path.relpath(file_path, extract_path)
                         new_zip.write(file_path, arc_name)
                         
+                        # Update packing progress periodically
+                        file_count += 1
+                        if progress_callback and file_count % 20 == 0:
+                            pack_progress = 0.8 + ((file_count / total_files) * 0.15)
+                            progress_callback(pack_progress, f"Repacking file {file_count} of {total_files}...")
+            
+            # Report progress: Finalizing
+            if progress_callback:
+                progress_callback(0.95, "Finalizing...")
+                
             # Step 8: Already has the correct .pptx extension
             logging.info(f"PowerPoint compression completed successfully!")
             
@@ -266,6 +390,10 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             logging.info(f"Compressed size: {compressed_size:.2f} MB")
             logging.info(f"Reduction: {reduction:.1f}%")
             
+            # Report progress: Complete!
+            if progress_callback:
+                progress_callback(1.0, f"Complete! Reduced size by {reduction:.1f}%")
+                
             # Explicit cleanup of temporary files (although tempfile context manager handles this)
             logging.info(f"Cleaning up temporary files")
             if os.path.exists(str(extract_path)):
@@ -274,7 +402,10 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             return True
             
     except Exception as e:
-        logging.error(f"Error compressing PowerPoint file: {str(e)}")
+        error_msg = f"Error compressing PowerPoint file: {str(e)}"
+        logging.error(error_msg)
+        if progress_callback:
+            progress_callback(0, f"Error: {error_msg}")
         return False
         
 if __name__ == "__main__":
