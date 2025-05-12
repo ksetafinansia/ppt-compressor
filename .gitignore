@@ -9,6 +9,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Virtual environment
+venv/
+env/
+ENV/
+
 # Temporary and backup files
 temp_extract/
 *.backup
