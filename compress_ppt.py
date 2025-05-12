@@ -225,12 +225,13 @@ def process_video_directory(directory_path, crf=28, preset="medium", extensions=
         
     return processed_files, total_original_size, total_compressed_size
 
-def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, video_preset="medium", progress_callback=None):
+def compress_ppt(ppt_file, output_path=None, image_scale=0.5, image_quality=70, video_crf=28, video_preset="medium", progress_callback=None):
     """
     Compress images and videos in PowerPoint file by extracting, compressing and repacking
     
     Args:
         ppt_file (str): Path to the .pptx file
+        output_path (str, optional): Path to save the compressed file. If None, overwrites the original.
         image_scale (float): Scale factor for image dimensions (0.5 = 50% of original)
         image_quality (int): Quality level for image compression (1-100)
         video_crf (int): Constant Rate Factor for video compression (18-28 recommended)
@@ -349,14 +350,15 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
                 progress_callback(0.8, "Repacking compressed content...")
                 
             # Step 6-7: Create a new zip file with the compressed contents
-            logging.info(f"Repacking compressed content to {ppt_file}")
+            final_output_path = output_path if output_path else ppt_file
+            logging.info(f"Repacking compressed content to {final_output_path}")
             
-            # Remove the original file before creating the new one
-            if os.path.exists(ppt_file):
-                os.remove(ppt_file)
+            # Remove the output file if it exists
+            if os.path.exists(final_output_path):
+                os.remove(final_output_path)
                 
             # Zip everything back up
-            with zipfile.ZipFile(ppt_file, 'w', compression=zipfile.ZIP_DEFLATED) as new_zip:
+            with zipfile.ZipFile(final_output_path, 'w', compression=zipfile.ZIP_DEFLATED) as new_zip:
                 # Walk through all files in the extracted directory and add them to the zip
                 file_count = 0
                 total_files = sum([len(files) for _, _, files in os.walk(extract_path)])
@@ -383,12 +385,17 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
             
             # Calculate file size reduction
             original_size = os.path.getsize(backup_path) / (1024 * 1024)  # MB
-            compressed_size = os.path.getsize(ppt_file) / (1024 * 1024)  # MB
+            compressed_size = os.path.getsize(final_output_path) / (1024 * 1024)  # MB
             reduction = (1 - (compressed_size / original_size)) * 100 if original_size > 0 else 0
             
             logging.info(f"Original size: {original_size:.2f} MB")
             logging.info(f"Compressed size: {compressed_size:.2f} MB")
             logging.info(f"Reduction: {reduction:.1f}%")
+            
+            # Delete the original file if output path is specified and different from the original
+            if output_path and os.path.abspath(output_path) != os.path.abspath(ppt_file) and os.path.exists(ppt_file):
+                logging.info(f"Deleting original file: {ppt_file}")
+                os.remove(ppt_file)
             
             # Report progress: Complete!
             if progress_callback:
@@ -411,6 +418,7 @@ def compress_ppt(ppt_file, image_scale=0.5, image_quality=70, video_crf=28, vide
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Compress images and videos in PowerPoint presentations')
     parser.add_argument('ppt_file', help='Path to the PowerPoint (.pptx) file')
+    parser.add_argument('--output-path', help='Path to save the compressed file. If not provided, overwrites the input file.')
     parser.add_argument('--image-scale', type=float, default=0.5, help='Scale factor for image dimensions (0.5 = 50% of original)')
     parser.add_argument('--image-quality', type=int, default=70, help='Quality level (1-100) for JPEG compression')
     parser.add_argument('--video-crf', type=int, default=28, help='Constant Rate Factor (18-28) for video compression')
@@ -420,4 +428,4 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    compress_ppt(args.ppt_file, args.image_scale, args.image_quality, args.video_crf, args.video_preset)
+    compress_ppt(args.ppt_file, args.output_path, args.image_scale, args.image_quality, args.video_crf, args.video_preset)

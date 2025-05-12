@@ -123,8 +123,8 @@ def compress_file_task(task):
         
         # Run the compression (the actual function doesn't report progress yet)
         success = compress_ppt(
-            task.file_path,
-            task.output_path, 
+            ppt_file=task.file_path,
+            output_path=task.output_path, 
             image_scale=task.params['image_scale'],
             image_quality=task.params['image_quality'],
             video_crf=task.params['video_crf'],
