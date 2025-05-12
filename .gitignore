@@ -1,33 +1,27 @@
-# Python bytecode files
+# Binary files
+*.pptx
+*.pdf
+*.docx
+*.xlsx
+
+# Python cache
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Logs
+# Temporary and backup files
+temp_extract/
+*.backup
 *.log
 
-# Environment variables
-.env
+# Specific files
+compressed_code.pptx
+input.pptx
+input.pptx.backup
+prompt.txt
 
-# Virtual environment
-venv/
-env/
-ENV/
-
-# User-uploaded content and temporary files
+# Uploads and downloads directories
 uploads/*
-!uploads/.gitkeep
 downloads/*
+!uploads/.gitkeep
 !downloads/.gitkeep
-backup/*
-!backup/.gitkeep
-temp_extract/
-
-# macOS system files
-.DS_Store
-
-# Editor directories and files
-.idea/
-.vscode/
-*.swp
-*.swo
