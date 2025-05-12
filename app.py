@@ -345,6 +345,52 @@ def get_file(filename):
         download_name=download_name
     )
 
+@app.route('/clean-and-redirect')
+def clean_and_redirect():
+    """Clean up uploaded and downloaded files, then redirect to index page"""
+    try:
+        # Get filenames from session
+        uploaded_filename = session.get('uploaded_filename')
+        compressed_filename = session.get('compressed_filename')
+        task_id = session.get('task_id')
+        
+        # Remove uploaded file if it exists
+        if uploaded_filename:
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
+            if os.path.exists(upload_path):
+                os.remove(upload_path)
+                logging.info(f"Removed uploaded file: {upload_path}")
+                
+        # Remove downloaded/compressed file if it exists
+        if compressed_filename:
+            download_path = os.path.join(DOWNLOAD_FOLDER, compressed_filename)
+            if os.path.exists(download_path):
+                os.remove(download_path)
+                logging.info(f"Removed compressed file: {download_path}")
+                
+        # Remove task if it exists
+        if task_id and task_id in tasks:
+            tasks.pop(task_id, None)
+            logging.info(f"Removed task: {task_id}")
+            
+        # Clear session data
+        if 'uploaded_filename' in session:
+            session.pop('uploaded_filename')
+        if 'compressed_filename' in session:
+            session.pop('compressed_filename')
+        if 'original_filename' in session:
+            session.pop('original_filename')
+        if 'task_id' in session:
+            session.pop('task_id')
+            
+        flash('All files have been removed', 'success')
+    except Exception as e:
+        logging.error(f"Error cleaning up files: {str(e)}")
+        flash('Error cleaning up files', 'error')
+        
+    # Redirect to index page
+    return redirect(url_for('index'))
+
 @app.route('/logs')
 def get_logs():
     """Return the captured logs from the memory handler"""

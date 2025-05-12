@@ -86,6 +86,12 @@
         .download-btn:hover {
             background-color: #219653;
         }
+        .secondary-btn {
+            background-color: #e67e22;
+        }
+        .secondary-btn:hover {
+            background-color: #d35400;
+        }
         .parameters {
             border-top: 1px solid #ddd;
             padding-top: 15px;
@@ -160,6 +166,95 @@
         }
         #toggle-logs-btn:hover, #refresh-logs-btn:hover {
             background-color: #95a5a6;
+        }
+        
+        /* Terms and Conditions Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            width: 80%;
+            max-width: 700px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .close-modal {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close-modal:hover,
+        .close-modal:focus {
+            color: black;
+            text-decoration: none;
+        }
+        
+        .terms-content {
+            margin: 20px 0;
+            max-height: 50vh;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        #accept-terms {
+            background-color: #27ae60;
+            display: block;
+            margin: 0 auto;
+            padding: 10px 25px;
+        }
+        
+        #accept-terms:hover {
+            background-color: #219653;
+        }
+        
+        .terms-checkbox {
+            display: flex;
+            align-items: center;
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .terms-checkbox input[type="checkbox"] {
+            margin-right: 10px;
+            width: auto;
+        }
+        
+        .terms-checkbox label {
+            display: inline;
+            font-weight: normal;
+        }
+        
+        .terms-content h3 {
+            margin-top: 20px;
+            color: #2c3e50;
+        }
+        
+        .terms-content ul,
+        .terms-content ol {
+            padding-left: 20px;
+        }
+        
+        .terms-content li {
+            margin-bottom: 5px;
         }
     </style>
 </head>

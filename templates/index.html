@@ -57,8 +57,46 @@
             </div>
         </div>
         
-        <button type="submit" id="submit-btn">Compress PowerPoint</button>
+        <!-- Terms and Conditions Checkbox -->
+        <div class="form-group terms-checkbox">
+            <input type="checkbox" id="terms-consent" name="terms-consent" required>
+            <label for="terms-consent">I agree to the <a href="#" id="terms-link">Terms and Conditions</a></label>
+        </div>
+        
+        <button type="submit" id="submit-btn" disabled>Compress PowerPoint</button>
     </form>
+    
+    <!-- Terms and Conditions Modal -->
+    <div id="terms-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>Terms and Conditions</h2>
+            <div class="terms-content">
+                <h3>Privacy Policy</h3>
+                <p>This service does not store or save your uploaded files for longer than necessary to process them. All files are automatically deleted after you download the compressed version or after a short period of inactivity.</p>
+                
+                <h3>How We Compress PowerPoint Files</h3>
+                <p>Our compression process works by:</p>
+                <ol>
+                    <li>Reducing the size and quality of images according to your selected parameters</li>
+                    <li>Re-encoding videos with more efficient settings</li>
+                    <li>Maintaining the original structure and functionality of your presentation</li>
+                </ol>
+                
+                <h3>Limitations</h3>
+                <p>While we strive to maintain the quality of your presentations, compression inherently involves some quality reduction to achieve smaller file sizes. Very complex presentations may experience some layout shifts or formatting changes.</p>
+                
+                <h3>User Responsibility</h3>
+                <p>By using this service, you acknowledge that:</p>
+                <ul>
+                    <li>You have the right to use and modify the files you upload</li>
+                    <li>You should always keep a backup of your original files</li>
+                    <li>You understand that compression is a trade-off between file size and quality</li>
+                </ul>
+            </div>
+            <button id="accept-terms">I Accept</button>
+        </div>
+    </div>
     
     <!-- Progress Bar Container -->
     <div class="progress-container" id="progress-container">
@@ -76,6 +114,47 @@
 </div>
 
 <script>
+    // Terms and Conditions Modal Functions
+    const modal = document.getElementById('terms-modal');
+    const termsLink = document.getElementById('terms-link');
+    const closeModal = document.getElementsByClassName('close-modal')[0];
+    const acceptButton = document.getElementById('accept-terms');
+    const termsCheckbox = document.getElementById('terms-consent');
+    const submitButton = document.getElementById('submit-btn');
+    
+    // Open modal when clicking on terms link
+    termsLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        modal.style.display = 'block';
+    });
+    
+    // Close modal when clicking X
+    closeModal.addEventListener('click', function() {
+        modal.style.display = 'none';
+    });
+    
+    // Close modal when clicking outside
+    window.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    // Accept terms and check the checkbox
+    acceptButton.addEventListener('click', function() {
+        termsCheckbox.checked = true;
+        modal.style.display = 'none';
+        updateSubmitButton();
+    });
+    
+    // Enable/disable submit button based on checkbox
+    termsCheckbox.addEventListener('change', updateSubmitButton);
+    
+    function updateSubmitButton() {
+        submitButton.disabled = !termsCheckbox.checked;
+    }
+
+    // Update sliders values
     function updateImageScaleValue(val) {
         document.getElementById('image_scale_value').textContent = Math.round(val * 100) + '%';
     }
@@ -132,12 +211,21 @@
         const progressBar = document.getElementById('progress-bar');
         const statusMessage = document.getElementById('status-message');
         
+        // Initialize submit button state
+        updateSubmitButton();
+        
         form.addEventListener('submit', function(e) {
             e.preventDefault();
             
             const fileInput = document.getElementById('file');
             if (!fileInput.files[0]) {
                 alert('Please select a file first.');
+                return;
+            }
+            
+            // Verify terms checkbox is checked
+            if (!termsCheckbox.checked) {
+                alert('Please agree to the Terms and Conditions before proceeding.');
                 return;
             }
             
